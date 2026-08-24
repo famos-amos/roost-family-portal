@@ -1,0 +1,406 @@
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../../theme/ThemeProvider';
+import {
+  useBoardsStore,
+  useCalendarStore,
+  useChoresStore,
+  useDailyStore,
+  useFamilyStore,
+  useMealsStore,
+  useSettingsStore,
+} from '../../store/useAppStore';
+import { dailyChallenges, verses } from '../../data/seed';
+import { buildMonthGrid, dayOfWeek, dayOfYear, todayIso } from '../../lib/date';
+import { CalendarIcon, ChoresIcon, MealIcon, QuestionIcon, StarIcon } from '../../components/icons';
+import { SegmentedControl } from '../../components/ui';
+import { WidgetSize } from '../../store/types';
+
+const Row = ({ children }: { children: React.ReactNode }) => <View style={{ marginBottom: 10 }}>{children}</View>;
+
+function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  const theme = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      {icon}
+      <Text style={{ fontFamily: theme.fonts.head, color: theme.colors.ink, fontSize: 15 }}>{children}</Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function CalendarWidgetContent({ size }: { size: WidgetSize }) {
+  const theme = useTheme();
+  const navigation = useNavigation<any>();
+  const [view, setView] = useState<'week' | 'month'>('month');
+  const events = useCalendarStore((s) => s.events);
+  const hidden = useSettingsStore((s) => s.hiddenPersonIds);
+  const family = useFamilyStore((s) => s.members);
+
+  const now = new Date();
+  const grid = useMemo(() => buildMonthGrid(now.getFullYear(), now.getMonth()), [now.getFullYear(), now.getMonth()]);
+  const visibleEvents = events.filter((e) => !e.personId || !hidden.includes(e.personId));
+  const days = view === 'month' ? grid : grid.filter((d) => {
+    const todayIdx = grid.findIndex((g) => g.date.toDateString() === now.toDateString());
+    const weekStart = Math.floor(todayIdx / 7) * 7;
+    const i = grid.indexOf(d);
+    return i >= weekStart && i < weekStart + 7;
+  });
+
+  const personColor = (id: string | null) => family.find((m) => m.id === id)?.color ?? theme.colors.inkSoft;
+
+  return (
+    <View>
+      <SectionTitle icon={<CalendarIcon size={17} color={theme.colors.ink} />}>Calendar</SectionTitle>
+      <SegmentedControl
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'week', label: 'Week' },
+          { value: 'month', label: 'Month' },
+        ]}
+      />
+      <View style={styles.calTitleRow}>
+        <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.ink, fontSize: 13, marginTop: 8 }}>
+          {now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </Text>
+      </View>
+      <View style={styles.dowRow}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <Text key={i} style={[styles.dow, { color: theme.colors.inkSoft, fontFamily: theme.fonts.headSemiBold }]}>
+            {d}
+          </Text>
+        ))}
+      </View>
+      <View style={styles.calGrid}>
+        {days.map(({ date, inMonth }, i) => {
+          const iso = date.toISOString().slice(0, 10);
+          const isToday = iso === todayIso();
+          const dayEvents = visibleEvents.filter((e) => e.date === iso);
+          return (
+            <Pressable
+              key={i}
+              onPress={() => navigation.navigate('Calendar')}
+              style={[
+                styles.calCell,
+                { backgroundColor: isToday ? theme.colors.panel : theme.isDark ? '#FFFFFF0A' : '#FFFFFFA8' },
+                isToday && { borderWidth: 2, borderColor: theme.colors.cal },
+                !inMonth && { opacity: 0.35 },
+              ]}
+            >
+              <Text style={{ fontSize: 10.5, color: theme.colors.ink, fontFamily: theme.fonts.bodyBold }}>
+                {date.getDate()}
+              </Text>
+              {size !== 'sm' && (
+                <View style={styles.dotRow}>
+                  {dayEvents.slice(0, 3).map((e) => (
+                    <View key={e.id} style={[styles.dot, { backgroundColor: personColor(e.personId) }]} />
+                  ))}
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+      {size === 'lg' && (
+        <View style={styles.legendRow}>
+          {family.map((m) => (
+            <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={[styles.legendDot, { backgroundColor: m.color }]} />
+              <Text style={{ fontSize: 11, fontFamily: theme.fonts.bodyBold, color: theme.colors.inkSoft }}>
+                {m.name}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function EventsWidgetContent({ size }: { size: WidgetSize }) {
+  const theme = useTheme();
+  const events = useCalendarStore((s) => s.events);
+  const hidden = useSettingsStore((s) => s.hiddenPersonIds);
+  const family = useFamilyStore((s) => s.members);
+  const today = todayIso();
+  const todays = events
+    .filter((e) => e.date === today && (!e.personId || !hidden.includes(e.personId)))
+    .sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
+
+  const personColor = (id: string | null) => family.find((m) => m.id === id)?.color ?? theme.colors.inkSoft;
+  const list = size === 'sm' ? todays.slice(0, 2) : todays;
+
+  return (
+    <View>
+      <SectionTitle icon={<CalendarIcon size={17} color={theme.colors.ink} />}>Today's Events</SectionTitle>
+      {list.length === 0 && (
+        <Text style={{ color: theme.colors.inkSoft, fontFamily: theme.fonts.body, fontSize: 13 }}>
+          Nothing on the calendar today.
+        </Text>
+      )}
+      {list.map((e) => (
+        <View key={e.id} style={[styles.eventRow, { borderBottomColor: theme.colors.border }]}>
+          <Text style={{ width: 64, fontFamily: theme.fonts.headSemiBold, fontSize: 12, color: theme.colors.inkSoft }}>
+            {e.time ?? 'All day'}
+          </Text>
+          <View style={[styles.eventDot, { backgroundColor: personColor(e.personId) }]} />
+          <Text style={{ fontFamily: theme.fonts.bodySemiBold, fontSize: 14, color: theme.colors.ink, flex: 1 }}>
+            {e.title}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function MealWidgetContent({ size }: { size: WidgetSize }) {
+  const theme = useTheme();
+  const meals = useMealsStore((s) => s.meals);
+  const family = useFamilyStore((s) => s.members);
+  const today = dayOfWeek();
+  const dinner = meals.find((m) => m.day === today && m.slot === 'dinner');
+  const chef = family.find((f) => f.id === dinner?.chefId);
+
+  const order: (typeof today)[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const todayIdx = order.indexOf(today);
+  const upcoming = [1, 2]
+    .map((offset) => order[(todayIdx + offset) % 7])
+    .map((d) => ({ day: d, meal: meals.find((m) => m.day === d && m.slot === 'dinner') }))
+    .filter((x) => x.meal);
+
+  return (
+    <View>
+      <SectionTitle icon={<MealIcon size={17} color={theme.colors.ink} />}>Meal Plan</SectionTitle>
+      <View style={[styles.mealHero, { backgroundColor: theme.isDark ? '#FFFFFF10' : '#FFFFFFA0' }]}>
+        <Text style={{ fontFamily: theme.fonts.head, fontSize: 15, color: theme.colors.ink, marginBottom: 3 }}>
+          {dinner?.name ?? 'No dinner planned yet'}
+        </Text>
+        {chef && (
+          <Text style={{ fontFamily: theme.fonts.bodyBold, fontSize: 11, color: theme.colors.inkSoft, marginBottom: 8 }}>
+            Chef: {chef.name} • Dinner
+          </Text>
+        )}
+        {!!dinner?.rating && (
+          <View style={{ flexDirection: 'row', gap: 3 }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <StarIcon key={i} size={15} color={theme.colors.star} filled={i < (dinner.rating ?? 0)} />
+            ))}
+          </View>
+        )}
+      </View>
+      {size !== 'sm' &&
+        upcoming.map(({ day, meal }) => (
+          <View key={day} style={[styles.mealRow, { borderTopColor: theme.colors.border }]}>
+            <Text style={{ fontFamily: theme.fonts.bodyBold, fontSize: 11, color: theme.colors.inkSoft }}>
+              {day === order[(todayIdx + 1) % 7] ? 'Tomorrow' : day[0].toUpperCase() + day.slice(1)}
+            </Text>
+            <Text style={{ fontFamily: theme.fonts.bodyBold, fontSize: 11, color: theme.colors.inkSoft }}>
+              {meal?.name}
+            </Text>
+          </View>
+        ))}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function TodoWidgetContent({ size }: { size: WidgetSize }) {
+  const theme = useTheme();
+  const items = useBoardsStore((s) => s.items.filter((i) => i.columnId === 'todo'));
+  const toggle = useBoardsStore((s) => s.toggleItem);
+  const list = size === 'sm' ? items.slice(0, 3) : items;
+
+  return (
+    <View>
+      <SectionTitle icon={<ChoresIcon size={17} color={theme.colors.ink} />}>To Do</SectionTitle>
+      {list.map((item) => (
+        <Pressable key={item.id} onPress={() => toggle(item.id)} style={styles.todoRow}>
+          <View
+            style={[
+              styles.todoBox,
+              { borderColor: theme.colors.boardsDk, backgroundColor: item.done ? theme.colors.boardsDk : 'transparent' },
+            ]}
+          />
+          <Text
+            style={{
+              fontFamily: theme.fonts.bodySemiBold,
+              fontSize: 13.5,
+              color: theme.colors.ink,
+              textDecorationLine: item.done ? 'line-through' : 'none',
+              opacity: item.done ? 0.55 : 1,
+            }}
+          >
+            {item.title}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function ChallengeWidgetContent() {
+  const theme = useTheme();
+  const { answeredDate, answer, setAnswer } = useDailyStore();
+  const idx = dayOfYear() % dailyChallenges.length;
+  const challenge = dailyChallenges[idx];
+  const today = todayIso();
+  const todaysAnswer = answeredDate === today ? answer : null;
+
+  return (
+    <View>
+      <SectionTitle icon={<QuestionIcon size={17} color={theme.colors.ink} />}>Daily Challenge</SectionTitle>
+      <View
+        style={{
+          alignSelf: 'flex-start',
+          paddingHorizontal: 11,
+          paddingVertical: 4,
+          borderRadius: 999,
+          backgroundColor: theme.isDark ? '#FFFFFF16' : '#FFFFFFB0',
+          marginBottom: 8,
+        }}
+      >
+        <Text style={{ fontFamily: theme.fonts.headSemiBold, fontSize: 10.5, color: theme.colors.boardsDk }}>
+          {challenge.tag}
+        </Text>
+      </View>
+      <Text style={{ fontFamily: theme.fonts.bodyBold, fontSize: 14, color: theme.colors.ink, marginBottom: 10 }}>
+        {challenge.question}
+      </Text>
+      {challenge.optionA && challenge.optionB && (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {[challenge.optionA, challenge.optionB].map((opt, i) => {
+            const key = i === 0 ? 'A' : 'B';
+            const picked = todaysAnswer === key;
+            return (
+              <Pressable
+                key={opt}
+                onPress={() => setAnswer(today, key)}
+                style={[
+                  styles.optBtn,
+                  { backgroundColor: theme.isDark ? '#FFFFFF16' : '#FFFFFFB0' },
+                  picked && { borderColor: theme.colors.boardsDk, borderWidth: 2 },
+                ]}
+              >
+                <Text style={{ fontFamily: theme.fonts.headSemiBold, fontSize: 11.5, color: theme.colors.ink }}>
+                  {opt}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function VerseWidgetContent() {
+  const theme = useTheme();
+  const idx = dayOfYear() % verses.length;
+  const verse = verses[idx];
+  return (
+    <View>
+      <SectionTitle icon={<Text style={{ fontSize: 16 }}>📖</Text>}>Verse of the Day</SectionTitle>
+      <Text style={{ fontFamily: theme.fonts.head, fontSize: 30, color: '#B79FD6', lineHeight: 26 }}>"</Text>
+      <Text style={{ fontFamily: theme.fonts.bodySemiBold, fontStyle: 'italic', fontSize: 13, color: theme.colors.ink, lineHeight: 19 }}>
+        {verse.text}
+      </Text>
+      <Text style={{ fontFamily: theme.fonts.headSemiBold, fontSize: 12, color: '#7A5AA6', marginTop: 8 }}>
+        {verse.ref}
+      </Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export function ChoresWidgetContent() {
+  const theme = useTheme();
+  const chores = useChoresStore((s) => s.chores);
+  const family = useFamilyStore((s) => s.members);
+
+  const withChores = family
+    .map((m) => {
+      const mine = chores.filter((c) => c.assigneeId === m.id);
+      const done = mine.filter((c) => c.done);
+      return {
+        member: m,
+        total: mine.length,
+        done: done.length,
+        stars: done.reduce((sum, c) => sum + c.points, 0),
+      };
+    })
+    .filter((x) => x.total > 0);
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 18 }}>
+      {withChores.map(({ member, total, done, stars }) => (
+        <View key={member.id} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontFamily: theme.fonts.head, fontSize: 13, color: member.color }}>{member.name}</Text>
+          <View
+            style={{
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+              borderWidth: 7,
+              borderColor: theme.isDark ? '#FFFFFF20' : '#FFFFFFB0',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <View
+              style={{
+                position: 'absolute',
+                width: 60,
+                height: 60,
+                borderRadius: 30,
+                borderWidth: 7,
+                borderColor: member.color,
+                opacity: total ? done / total : 0,
+              }}
+            />
+            <Text style={{ fontFamily: theme.fonts.head, fontSize: 12, color: theme.colors.ink }}>
+              {done}/{total}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+            <StarIcon size={11} color={theme.colors.star} />
+            <Text style={{ fontSize: 10.5, fontFamily: theme.fonts.bodyBold, color: theme.colors.inkSoft }}>
+              {stars} stars earned
+            </Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  calTitleRow: { marginBottom: 2 },
+  dowRow: { flexDirection: 'row', marginTop: 8 },
+  dow: { flex: 1, textAlign: 'center', fontSize: 10 },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2,
+    borderRadius: 8,
+  },
+  dotRow: { flexDirection: 'row', gap: 2, marginTop: 2 },
+  dot: { width: 4.5, height: 4.5, borderRadius: 2.5 },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#00000018', borderStyle: 'dashed' },
+  legendDot: { width: 9, height: 9, borderRadius: 4.5 },
+  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderBottomWidth: 1 },
+  eventDot: { width: 9, height: 9, borderRadius: 4.5 },
+  mealHero: { borderRadius: 16, padding: 12 },
+  mealRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, marginTop: 4 },
+  todoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  todoBox: { width: 17, height: 17, borderRadius: 6, borderWidth: 2 },
+  optBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 12, borderWidth: 2, borderColor: 'transparent' },
+});

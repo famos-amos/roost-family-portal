@@ -1,0 +1,114 @@
+// Placeholder starter data so the app has something to show on first launch.
+// Everything here is fully editable/removable from within the app (Settings,
+// and each screen's own add/remove controls) — nothing is hardcoded at runtime.
+import { BoardColumn, BoardItem, CalendarEvent, Chore, FamilyMember, Meal } from '../store/types';
+
+export const seedFamily: FamilyMember[] = [
+  { id: 'mom', name: 'Mom', color: '#D98CA6', initials: 'M', birthday: '1988-04-12' },
+  { id: 'dad', name: 'Dad', color: '#7FA8D9', initials: 'D', birthday: '1986-11-03' },
+  { id: 'milo', name: 'Milo', color: '#5FB8A8', initials: 'Mi', birthday: '2016-06-28' },
+  { id: 'kaya', name: 'Kaya', color: '#E3A94C', initials: 'K', birthday: '2018-02-15' },
+];
+
+export const seedChores: Chore[] = [
+  { id: 'c1', title: 'Sweep the porch', assigneeId: null, points: 2, done: false },
+  { id: 'c2', title: 'Water the plants', assigneeId: null, points: 1, done: false },
+  { id: 'c3', title: 'Take out trash', assigneeId: 'milo', points: 1, done: true },
+  { id: 'c4', title: 'Do the dishes', assigneeId: 'milo', points: 2, done: false },
+  { id: 'c5', title: 'Feed the cat', assigneeId: 'kaya', points: 1, done: true },
+  { id: 'c6', title: 'Make bed', assigneeId: 'kaya', points: 1, done: true },
+  { id: 'c7', title: 'Fold laundry', assigneeId: 'kaya', points: 2, done: false },
+  { id: 'c8', title: 'Plan grocery list', assigneeId: 'mom', points: 0, done: false },
+  { id: 'c9', title: 'Pay bills', assigneeId: 'dad', points: 0, done: false },
+];
+
+export const seedMeals: Meal[] = [
+  { id: 'm1', day: 'mon', slot: 'lunch', name: 'Leftovers', chefId: 'dad' },
+  { id: 'm2', day: 'tue', slot: 'lunch', name: 'Grilled Cheese', chefId: 'milo' },
+  { id: 'm3', day: 'thu', slot: 'lunch', name: 'Turkey Sandwiches', chefId: 'mom' },
+  { id: 'm4', day: 'fri', slot: 'lunch', name: 'Pizza Slices', chefId: 'dad' },
+  { id: 'm5', day: 'sun', slot: 'lunch', name: 'Pancake Brunch', chefId: 'mom' },
+  { id: 'm6', day: 'mon', slot: 'dinner', name: 'Taco Night', chefId: 'kaya' },
+  { id: 'm7', day: 'tue', slot: 'dinner', name: 'BBQ Chicken', chefId: 'dad' },
+  { id: 'm8', day: 'wed', slot: 'dinner', name: 'Homemade Pizza', chefId: 'milo' },
+  { id: 'm9', day: 'thu', slot: 'dinner', name: 'Veggie Stir-fry', chefId: 'mom' },
+  { id: 'm10', day: 'fri', slot: 'dinner', name: 'Grilled Salmon', chefId: 'dad' },
+  { id: 'm11', day: 'sat', slot: 'dinner', name: 'Roast & Veggies', chefId: 'mom' },
+  {
+    id: 'm12',
+    day: 'sun',
+    slot: 'dinner',
+    name: 'Spaghetti & Meatballs',
+    chefId: 'mom',
+    rating: 4,
+    notes: "Double the recipe — Milo's friend is staying over for dinner.",
+  },
+];
+
+export const seedBoardColumns: BoardColumn[] = [
+  { id: 'todo', title: 'Family To-Do', color: '#3D6FA8' },
+  { id: 'wishlist', title: 'Wishlist', color: '#7A5AA6' },
+  { id: 'shopping', title: 'Shopping List', color: '#2E7A4D' },
+];
+
+export const seedBoardItems: BoardItem[] = [
+  { id: 'b1', columnId: 'todo', title: 'Schedule dentist appointments', ownerId: 'mom', done: false },
+  { id: 'b2', columnId: 'todo', title: 'Fix leaky faucet', ownerId: 'dad', done: false },
+  { id: 'b3', columnId: 'todo', title: 'Return Amazon package', ownerId: 'kaya', done: false },
+  {
+    id: 'b4',
+    columnId: 'wishlist',
+    title: 'Nintendo Switch game',
+    description: 'Mario Kart — for birthday',
+    ownerId: 'milo',
+    done: false,
+  },
+  {
+    id: 'b5',
+    columnId: 'wishlist',
+    title: 'Roller skates',
+    description: 'Pink ones from the mall',
+    ownerId: 'kaya',
+    done: false,
+  },
+  { id: 'b6', columnId: 'shopping', title: 'Milk', ownerId: 'mom', done: false },
+  { id: 'b7', columnId: 'shopping', title: 'AA batteries', ownerId: 'dad', done: false },
+  {
+    id: 'b8',
+    columnId: 'shopping',
+    title: 'Poster board',
+    description: 'For the school project',
+    ownerId: 'milo',
+    done: false,
+  },
+];
+
+// A handful of sample events on the current month so the calendar isn't empty
+// on first launch. Real usage replaces these via Add Event / calendar sync.
+function isoDateInCurrentMonth(day: number): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), day);
+  return d.toISOString().slice(0, 10);
+}
+
+export const seedEvents: CalendarEvent[] = [
+  { id: 'e1', date: isoDateInCurrentMonth(5), title: 'Beach day', personId: 'dad', source: 'local' },
+  { id: 'e2', date: isoDateInCurrentMonth(15), title: 'Business trip', personId: 'dad', source: 'local' },
+  { id: 'e3', date: isoDateInCurrentMonth(new Date().getDate()), time: '9:00 AM', title: 'Soccer practice', personId: 'milo', source: 'local' },
+  { id: 'e4', date: isoDateInCurrentMonth(new Date().getDate()), time: '3:30 PM', title: 'Dentist appointment', personId: 'kaya', source: 'local' },
+  { id: 'e5', date: isoDateInCurrentMonth(new Date().getDate()), time: '6:00 PM', title: 'Family dinner', personId: 'dad', source: 'local' },
+  { id: 'e6', date: isoDateInCurrentMonth(new Date().getDate() + 1), title: 'Book club', personId: 'mom', source: 'local' },
+  { id: 'e7', date: isoDateInCurrentMonth(Math.min(new Date().getDate() + 3, 28)), title: 'Piano lesson', personId: 'kaya', source: 'local' },
+];
+
+export const dailyChallenges = [
+  { question: 'Would you rather explore outer space or the deep ocean?', tag: 'Would You Rather', optionA: 'Space', optionB: 'Ocean' },
+  { question: 'Would you rather have the power of invisibility or flight?', tag: 'Would You Rather', optionA: 'Invisibility', optionB: 'Flight' },
+  { question: 'What is one thing you’re grateful for today?', tag: 'Question', optionA: undefined, optionB: undefined },
+];
+
+export const verses = [
+  { text: 'Trust in the LORD with all your heart, and lean not on your own understanding.', ref: 'Proverbs 3:5' },
+  { text: 'I can do all things through him who strengthens me.', ref: 'Philippians 4:13' },
+  { text: 'Be strong and courageous. Do not be afraid; do not be discouraged.', ref: 'Joshua 1:9' },
+];

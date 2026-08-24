@@ -1,3 +1,6 @@
+// Must be the very first import — sets up native gesture handling before
+// anything else touches the RN bridge.
+import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
 
 import App from './App';
