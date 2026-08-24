@@ -3,7 +3,8 @@ import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput
 import { TopBar } from '../components/TopBar';
 import { useTheme } from '../theme/ThemeProvider';
 import { useChoresStore, useFamilyStore } from '../store/useAppStore';
-import { PlusIcon, StarIcon } from '../components/icons';
+import { EditIcon, PlusIcon, StarIcon } from '../components/icons';
+import { confirmAction } from '../lib/alerts';
 import { Checkbox, PrimaryButton } from '../components/ui';
 import { Chore } from '../store/types';
 
@@ -13,10 +14,13 @@ export function ChoresScreen() {
   const toggleChore = useChoresStore((s) => s.toggleChore);
   const claimChore = useChoresStore((s) => s.claimChore);
   const addChore = useChoresStore((s) => s.addChore);
+  const updateChore = useChoresStore((s) => s.updateChore);
+  const removeChore = useChoresStore((s) => s.removeChore);
   const resetWeek = useChoresStore((s) => s.resetWeek);
   const family = useFamilyStore((s) => s.members);
 
   const [addingFor, setAddingFor] = useState<string | null | 'new'>(null);
+  const [editing, setEditing] = useState<Chore | null>(null);
 
   const totalStarsThisWeek = chores.filter((c) => c.done).reduce((sum, c) => sum + c.points, 0);
 
@@ -42,10 +46,9 @@ export function ChoresScreen() {
         <PrimaryButton label="Reset Week" color={theme.colors.inkSoft} onPress={resetWeek} />
       </View>
 
-      <ScrollView horizontal contentContainerStyle={styles.board}>
+      <ScrollView horizontal style={styles.scroll} contentContainerStyle={styles.board}>
         {columns.map((col) => {
           const items = chores.filter((c) => c.assigneeId === col.key);
-          const assigneeName = col.key ? family.find((f) => f.id === col.key)?.name : undefined;
           return (
             <View key={col.key ?? 'grabs'} style={[styles.col, { backgroundColor: col.color }]}>
               <View style={styles.colHead}>
@@ -64,6 +67,7 @@ export function ChoresScreen() {
                   onToggle={() => toggleChore(chore.id)}
                   onClaim={col.key === null ? () => claimChore(chore.id, family[0]?.id ?? '') : undefined}
                   claimLabel={col.key === null ? 'Claim' : undefined}
+                  onEdit={() => setEditing(chore)}
                 />
               ))}
 
@@ -81,13 +85,36 @@ export function ChoresScreen() {
         })}
       </ScrollView>
 
-      <AddChoreModal
+      <ChoreFormModal
         visible={addingFor !== null}
-        assigneeId={addingFor === 'new' ? null : addingFor}
+        mode="add"
+        initial={undefined}
+        defaultAssigneeId={addingFor === 'new' ? null : addingFor}
         onClose={() => setAddingFor(null)}
-        onSave={(title, points, assigneeId) => {
-          addChore({ title, points, assigneeId });
+        onSave={(patch) => {
+          addChore(patch);
           setAddingFor(null);
+        }}
+        onDelete={undefined}
+      />
+
+      <ChoreFormModal
+        visible={editing !== null}
+        mode="edit"
+        initial={editing ?? undefined}
+        defaultAssigneeId={null}
+        onClose={() => setEditing(null)}
+        onSave={(patch) => {
+          if (!editing) return;
+          updateChore(editing.id, patch);
+          setEditing(null);
+        }}
+        onDelete={() => {
+          if (!editing) return;
+          confirmAction('Delete chore?', `Remove "${editing.title}" for good?`, 'Delete', () => {
+            removeChore(editing.id);
+            setEditing(null);
+          }, { destructive: true });
         }}
       />
     </SafeAreaView>
@@ -99,11 +126,13 @@ function ChoreCard({
   onToggle,
   onClaim,
   claimLabel,
+  onEdit,
 }: {
   chore: Chore;
   onToggle: () => void;
   onClaim?: () => void;
   claimLabel?: string;
+  onEdit: () => void;
 }) {
   const theme = useTheme();
   return (
@@ -133,41 +162,51 @@ function ChoreCard({
           </Text>
         </View>
       ) : null}
+      <Pressable onPress={onEdit} hitSlop={8} style={styles.editBtn}>
+        <EditIcon size={13} color={theme.colors.inkSoft} />
+      </Pressable>
     </View>
   );
 }
 
-function AddChoreModal({
+function ChoreFormModal({
   visible,
-  assigneeId,
+  mode,
+  initial,
+  defaultAssigneeId,
   onClose,
   onSave,
+  onDelete,
 }: {
   visible: boolean;
-  assigneeId: string | null;
+  mode: 'add' | 'edit';
+  initial: Chore | undefined;
+  defaultAssigneeId: string | null;
   onClose: () => void;
-  onSave: (title: string, points: number, assigneeId: string | null) => void;
+  onSave: (patch: { title: string; points: number; assigneeId: string | null }) => void;
+  onDelete: (() => void) | undefined;
 }) {
   const theme = useTheme();
   const family = useFamilyStore((s) => s.members);
   const [title, setTitle] = useState('');
   const [points, setPoints] = useState('1');
-  const [assignee, setAssignee] = useState<string | null>(assigneeId);
+  const [assignee, setAssignee] = useState<string | null>(defaultAssigneeId);
 
   React.useEffect(() => {
     if (visible) {
-      setTitle('');
-      setPoints('1');
-      setAssignee(assigneeId);
+      setTitle(initial?.title ?? '');
+      setPoints(String(initial?.points ?? 1));
+      setAssignee(initial?.assigneeId ?? defaultAssigneeId);
     }
-  }, [visible, assigneeId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
         <View style={[styles.modalCard, { backgroundColor: theme.colors.panel }]}>
           <Text style={{ fontFamily: theme.fonts.head, fontSize: 17, color: theme.colors.ink, marginBottom: 14 }}>
-            New Chore
+            {mode === 'edit' ? 'Edit Chore' : 'New Chore'}
           </Text>
           <TextInput
             placeholder="Chore title"
@@ -206,15 +245,20 @@ function AddChoreModal({
             ))}
           </View>
           <View style={{ flexDirection: 'row', gap: 10 }}>
+            {onDelete && (
+              <Pressable onPress={onDelete} style={[styles.modalBtn, { backgroundColor: theme.colors.danger + '22', flex: 0.7 }]}>
+                <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.danger }}>Delete</Text>
+              </Pressable>
+            )}
             <Pressable onPress={onClose} style={[styles.modalBtn, { backgroundColor: theme.colors.fieldBg }]}>
               <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.inkSoft }}>Cancel</Text>
             </Pressable>
             <Pressable
               disabled={!title.trim()}
-              onPress={() => onSave(title.trim(), Number(points) || 0, assignee)}
+              onPress={() => onSave({ title: title.trim(), points: Number(points) || 0, assigneeId: assignee })}
               style={[styles.modalBtn, { backgroundColor: theme.colors.ink, opacity: title.trim() ? 1 : 0.4 }]}
             >
-              <Text style={{ fontFamily: theme.fonts.headSemiBold, color: '#fff' }}>Add</Text>
+              <Text style={{ fontFamily: theme.fonts.headSemiBold, color: '#fff' }}>{mode === 'edit' ? 'Save' : 'Add'}</Text>
             </Pressable>
           </View>
         </View>
@@ -225,6 +269,7 @@ function AddChoreModal({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, paddingBottom: 12, flexWrap: 'wrap' },
   weekPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
   starsPill: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
@@ -234,6 +279,7 @@ const styles = StyleSheet.create({
   countBadge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },
   choreCard: { flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 14, padding: 11 },
   claimBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  editBtn: { paddingLeft: 6 },
   addItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed' },
   modalBackdrop: { flex: 1, backgroundColor: '#00000050', alignItems: 'center', justifyContent: 'center' },
   modalCard: { width: 420, borderRadius: 24, padding: 22 },

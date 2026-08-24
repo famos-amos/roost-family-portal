@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { TopBar } from '../components/TopBar';
 import { useTheme } from '../theme/ThemeProvider';
@@ -8,6 +8,20 @@ import { WEEKDAY_LABELS, dayOfWeek } from '../lib/date';
 import { BoardsIcon, BookIcon, MealIcon, PlusIcon, StarIcon } from '../components/icons';
 import { PrimaryButton, SegmentedControl } from '../components/ui';
 import { DayOfWeek, Meal, MealSlotType } from '../store/types';
+import { confirmAction } from '../lib/alerts';
+
+function StarRatingPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const theme = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', gap: 6 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Pressable key={n} onPress={() => onChange(n === value ? 0 : n)} hitSlop={6}>
+          <StarIcon size={22} color={theme.colors.star} filled={n <= value} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 
 const SLOTS: MealSlotType[] = ['breakfast', 'lunch', 'dinner'];
 
@@ -16,6 +30,7 @@ export function MealPlansScreen() {
   const navigation = useNavigation<any>();
   const meals = useMealsStore((s) => s.meals);
   const upsertMeal = useMealsStore((s) => s.upsertMeal);
+  const removeMeal = useMealsStore((s) => s.removeMeal);
   const family = useFamilyStore((s) => s.members);
   const today = dayOfWeek();
 
@@ -37,7 +52,7 @@ export function MealPlansScreen() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={styles.plannerWrap}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.plannerWrap}>
         <View style={styles.planner}>
           {WEEKDAY_LABELS.map(({ key, label }) => (
             <Text
@@ -101,21 +116,15 @@ export function MealPlansScreen() {
       </ScrollView>
 
       <View style={styles.quicklinks}>
-        <Pressable style={[styles.qlink, { backgroundColor: theme.colors.panel }]} onPress={() => navigation.navigate('Boards')}>
+        <Pressable style={[styles.qlink, { backgroundColor: theme.colors.panel }]} onPress={() => navigation.navigate('GroceryList')}>
           <BoardsIcon size={18} color={theme.colors.ink} />
           <Text style={{ fontFamily: theme.fonts.headSemiBold, fontSize: 14, color: theme.colors.ink }}>Grocery List</Text>
         </Pressable>
-        <Pressable
-          style={[styles.qlink, { backgroundColor: theme.colors.panel }]}
-          onPress={() => Alert.alert('Recipes', 'Recipe library is coming in a future update.')}
-        >
+        <Pressable style={[styles.qlink, { backgroundColor: theme.colors.panel }]} onPress={() => navigation.navigate('Recipes')}>
           <BookIcon size={18} color={theme.colors.ink} />
           <Text style={{ fontFamily: theme.fonts.headSemiBold, fontSize: 14, color: theme.colors.ink }}>Recipes</Text>
         </Pressable>
-        <Pressable
-          style={[styles.qlink, { backgroundColor: theme.colors.panel }]}
-          onPress={() => Alert.alert('Suggestions', 'Meal suggestions are coming in a future update.')}
-        >
+        <Pressable style={[styles.qlink, { backgroundColor: theme.colors.panel }]} onPress={() => navigation.navigate('Suggestions')}>
           <StarIcon size={18} color={theme.colors.ink} filled={false} />
           <Text style={{ fontFamily: theme.fonts.headSemiBold, fontSize: 14, color: theme.colors.ink }}>Suggestions</Text>
         </Pressable>
@@ -129,6 +138,17 @@ export function MealPlansScreen() {
           upsertMeal({ id: editing.meal?.id, day: editing.day, ...patch });
           setEditing(null);
         }}
+        onDelete={
+          editing?.meal
+            ? () => {
+                if (!editing?.meal) return;
+                confirmAction('Delete meal?', `Remove "${editing.meal.name}" from the plan?`, 'Delete', () => {
+                  removeMeal(editing.meal!.id);
+                  setEditing(null);
+                }, { destructive: true });
+              }
+            : undefined
+        }
       />
     </SafeAreaView>
   );
@@ -138,10 +158,12 @@ function EditMealModal({
   editing,
   onClose,
   onSave,
+  onDelete,
 }: {
   editing: { day: DayOfWeek; slot: MealSlotType; meal?: Meal } | null;
   onClose: () => void;
-  onSave: (patch: { name: string; chefId: string | null; notes?: string; slot: MealSlotType }) => void;
+  onSave: (patch: { name: string; chefId: string | null; notes?: string; slot: MealSlotType; rating?: number }) => void;
+  onDelete: (() => void) | undefined;
 }) {
   const theme = useTheme();
   const family = useFamilyStore((s) => s.members);
@@ -149,6 +171,7 @@ function EditMealModal({
   const [chefId, setChefId] = useState<string | null>(null);
   const [slot, setSlot] = useState<MealSlotType>('dinner');
   const [notes, setNotes] = useState('');
+  const [rating, setRating] = useState(0);
 
   React.useEffect(() => {
     if (editing) {
@@ -156,6 +179,7 @@ function EditMealModal({
       setChefId(editing.meal?.chefId ?? null);
       setSlot(editing.slot);
       setNotes(editing.meal?.notes ?? '');
+      setRating(editing.meal?.rating ?? 0);
     }
   }, [editing]);
 
@@ -216,13 +240,23 @@ function EditMealModal({
             style={[styles.input, { backgroundColor: theme.colors.fieldBg, color: theme.colors.ink, minHeight: 56 }]}
           />
 
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+          <Text style={[styles.label, { color: theme.colors.inkSoft }]}>Rating</Text>
+          <View style={{ marginBottom: 4 }}>
+            <StarRatingPicker value={rating} onChange={setRating} />
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+            {onDelete && (
+              <Pressable onPress={onDelete} style={[styles.modalBtn, { backgroundColor: theme.colors.danger + '22', flex: 0.7 }]}>
+                <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.danger }}>Delete</Text>
+              </Pressable>
+            )}
             <Pressable onPress={onClose} style={[styles.modalBtn, { backgroundColor: theme.colors.fieldBg }]}>
               <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.inkSoft }}>Cancel</Text>
             </Pressable>
             <Pressable
               disabled={!name.trim()}
-              onPress={() => onSave({ name: name.trim(), chefId, notes: notes.trim() || undefined, slot })}
+              onPress={() => onSave({ name: name.trim(), chefId, notes: notes.trim() || undefined, slot, rating: rating || undefined })}
               style={[styles.modalBtn, { backgroundColor: theme.colors.mealDk, opacity: name.trim() ? 1 : 0.4 }]}
             >
               <Text style={{ fontFamily: theme.fonts.headSemiBold, color: '#fff' }}>Save</Text>
@@ -236,6 +270,7 @@ function EditMealModal({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, paddingBottom: 10 },
   plannerWrap: { paddingHorizontal: 24 },
   planner: { flexDirection: 'row', flexWrap: 'wrap' },
