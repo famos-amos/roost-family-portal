@@ -210,8 +210,9 @@ export function MealWidgetContent({ size }: { size: WidgetSize }) {
 // ---------------------------------------------------------------------------
 export function TodoWidgetContent({ size }: { size: WidgetSize }) {
   const theme = useTheme();
-  const items = useBoardsStore((s) => s.items.filter((i) => i.columnId === 'todo'));
+  const allItems = useBoardsStore((s) => s.items);
   const toggle = useBoardsStore((s) => s.toggleItem);
+  const items = allItems.filter((i) => i.columnId === 'todo');
   const list = size === 'sm' ? items.slice(0, 3) : items;
 
   return (

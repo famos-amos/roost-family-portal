@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -393,15 +394,19 @@ function ConnectedCalendarsSection() {
               Apple / iCloud Calendar
             </Text>
             <Text style={{ fontFamily: theme.fonts.body, fontSize: 12.5, color: theme.colors.inkSoft, marginTop: 2 }}>
-              {apple.connected ? `Connected as ${apple.appleId}.` : 'Sign in with an app-specific password.'}
+              {Platform.OS === 'web'
+                ? "Not available in the web version — iCloud's servers block browser requests (CORS). Use the tablet's Expo Go / installed app build instead."
+                : apple.connected
+                ? `Connected as ${apple.appleId}.`
+                : 'Sign in with an app-specific password.'}
             </Text>
           </View>
-          {apple.connected && (
+          {apple.connected && Platform.OS !== 'web' && (
             <PrimaryButton label="Disconnect" color={theme.colors.danger} onPress={disconnectApple} />
           )}
         </View>
 
-        {!apple.connected && (
+        {!apple.connected && Platform.OS !== 'web' && (
           <View style={{ marginTop: 12, gap: 8 }}>
             <TextInput
               value={appleId}

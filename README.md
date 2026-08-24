@@ -96,6 +96,57 @@ anywhere but Apple's own CalDAV servers.
 > XML parsing in `parseIcsEventsFromMultistatus` against however iCloud
 > actually formats its multistatus responses.
 
+## Deploying to the web (GitHub Pages)
+
+Roost is a React Native / Expo app, but Expo can export the same codebase as
+a static website (React Native Web) — no separate web build to maintain.
+This repo is already set up to auto-deploy that web build to GitHub Pages
+on every push to `main`, via `.github/workflows/deploy-pages.yml`.
+
+**One-time setup, in the GitHub repo's settings:**
+
+1. Go to **Settings → Pages**.
+2. Under "Build and deployment" → **Source**, choose **GitHub Actions**
+   (not "Deploy from a branch").
+3. Push to `main` (or go to the **Actions** tab and run the "Deploy web
+   build to GitHub Pages" workflow manually). The first run takes a couple
+   of minutes; after that, the site is live at:
+
+   ```
+   https://<your-github-username>.github.io/roost-family-portal/
+   ```
+
+Every subsequent push to `main` re-runs the workflow and updates that same
+URL automatically — nobody visiting the site ever needs to run `npm
+install` or anything else; that command only matters for people who want
+to edit the code or run it locally.
+
+**If you rename the repo**, update the base path to match — it's set in
+two places:
+
+- `app.json` → `expo.experiments.baseUrl` (e.g. `/new-repo-name`)
+- the deployed URL itself will change to `https://<username>.github.io/new-repo-name/`
+
+**Two things that behave differently on the web build**, both by
+necessity rather than oversight:
+
+- **Apple/iCloud Calendar sync is native-only.** iCloud's CalDAV servers
+  don't allow cross-origin requests from a browser (no CORS headers), so
+  there's no way to reach them from a web page — only from a native app.
+  The Settings screen detects this and hides the Apple connect form on
+  web with an explanation instead.
+- **Google Calendar sync's redirect URI is different for web.** If you
+  want Google sync to work on the deployed site (not just in Expo Go),
+  add your GitHub Pages URL itself
+  (`https://<username>.github.io/roost-family-portal`) as an **Authorized
+  redirect URI** on the **Web application** OAuth client you created in
+  Google Cloud Console (see "Google Calendar setup" above) — Google
+  redirects back to that exact URL after sign-in.
+- Landscape-lock (`app.json` → `orientation: "landscape"`) is a native
+  setting and has no effect in a browser — on the web build the tablet's
+  own browser chrome and orientation apply, so keep the tablet propped in
+  landscape as intended.
+
 ## Project structure
 
 ```

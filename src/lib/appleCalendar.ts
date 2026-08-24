@@ -12,6 +12,7 @@
 // but this sandbox has no way to exercise them against a real iCloud account
 // or network, so treat it as a solid first draft that needs verification on
 // a real device with a real Apple ID before you rely on it. See README.md.
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { CalendarEvent } from '../store/types';
 
@@ -20,17 +21,44 @@ const PRINCIPAL_URL = 'https://caldav.icloud.com/';
 
 export type AppleCredentials = { appleId: string; appSpecificPassword: string };
 
+// expo-secure-store has no device keychain on web (there isn't one) — its web
+// build is a no-op stub. Fall back to localStorage there. It's not as safe as
+// a native keychain, but it matches what any browser-based app can offer, and
+// this only ever runs on the tablet's own browser.
+async function storageSet(key: string, value: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    window.localStorage.setItem(key, value);
+    return;
+  }
+  await SecureStore.setItemAsync(key, value);
+}
+
+async function storageGet(key: string): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return window.localStorage.getItem(key);
+  }
+  return SecureStore.getItemAsync(key);
+}
+
+async function storageDelete(key: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    window.localStorage.removeItem(key);
+    return;
+  }
+  await SecureStore.deleteItemAsync(key);
+}
+
 export async function saveAppleCredentials(creds: AppleCredentials): Promise<void> {
-  await SecureStore.setItemAsync(CREDENTIAL_KEY, JSON.stringify(creds));
+  await storageSet(CREDENTIAL_KEY, JSON.stringify(creds));
 }
 
 export async function loadAppleCredentials(): Promise<AppleCredentials | null> {
-  const raw = await SecureStore.getItemAsync(CREDENTIAL_KEY);
+  const raw = await storageGet(CREDENTIAL_KEY);
   return raw ? (JSON.parse(raw) as AppleCredentials) : null;
 }
 
 export async function clearAppleCredentials(): Promise<void> {
-  await SecureStore.deleteItemAsync(CREDENTIAL_KEY);
+  await storageDelete(CREDENTIAL_KEY);
 }
 
 function authHeader(creds: AppleCredentials): string {
