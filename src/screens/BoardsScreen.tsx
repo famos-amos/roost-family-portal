@@ -3,9 +3,11 @@ import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput
 import { TopBar } from '../components/TopBar';
 import { useTheme } from '../theme/ThemeProvider';
 import { useBoardsStore, useFamilyStore } from '../store/useAppStore';
-import { PlusIcon } from '../components/icons';
+import { EditIcon, PlusIcon } from '../components/icons';
 import { Checkbox, PrimaryButton } from '../components/ui';
 import { personColorOptions } from '../theme/colors';
+import { BoardItem } from '../store/types';
+import { confirmAction } from '../lib/alerts';
 
 export function BoardsScreen() {
   const theme = useTheme();
@@ -13,10 +15,13 @@ export function BoardsScreen() {
   const items = useBoardsStore((s) => s.items);
   const toggleItem = useBoardsStore((s) => s.toggleItem);
   const addItem = useBoardsStore((s) => s.addItem);
+  const updateItem = useBoardsStore((s) => s.updateItem);
+  const removeItem = useBoardsStore((s) => s.removeItem);
   const addColumn = useBoardsStore((s) => s.addColumn);
   const family = useFamilyStore((s) => s.members);
 
   const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [editing, setEditing] = useState<BoardItem | null>(null);
   const [newColumnOpen, setNewColumnOpen] = useState(false);
 
   return (
@@ -79,6 +84,9 @@ export function BoardsScreen() {
                         </Text>
                       )}
                     </View>
+                    <Pressable onPress={() => setEditing(item)} hitSlop={8} style={styles.editBtn}>
+                      <EditIcon size={13} color={theme.colors.inkSoft} />
+                    </Pressable>
                   </View>
                 );
               })}
@@ -94,13 +102,35 @@ export function BoardsScreen() {
         })}
       </ScrollView>
 
-      <AddItemModal
-        columnId={addingTo}
+      <ItemFormModal
+        mode="add"
+        visible={addingTo !== null}
+        initial={undefined}
         onClose={() => setAddingTo(null)}
-        onSave={(title, description, ownerId) => {
+        onSave={(patch) => {
           if (!addingTo) return;
-          addItem({ columnId: addingTo, title, description: description || undefined, ownerId });
+          addItem({ columnId: addingTo, ...patch });
           setAddingTo(null);
+        }}
+        onDelete={undefined}
+      />
+
+      <ItemFormModal
+        mode="edit"
+        visible={editing !== null}
+        initial={editing ?? undefined}
+        onClose={() => setEditing(null)}
+        onSave={(patch) => {
+          if (!editing) return;
+          updateItem(editing.id, patch);
+          setEditing(null);
+        }}
+        onDelete={() => {
+          if (!editing) return;
+          confirmAction('Delete item?', `Remove "${editing.title}" for good?`, 'Delete', () => {
+            removeItem(editing.id);
+            setEditing(null);
+          }, { destructive: true });
         }}
       />
 
@@ -116,14 +146,20 @@ export function BoardsScreen() {
   );
 }
 
-function AddItemModal({
-  columnId,
+function ItemFormModal({
+  mode,
+  visible,
+  initial,
   onClose,
   onSave,
+  onDelete,
 }: {
-  columnId: string | null;
+  mode: 'add' | 'edit';
+  visible: boolean;
+  initial: BoardItem | undefined;
   onClose: () => void;
-  onSave: (title: string, description: string, ownerId: string | undefined) => void;
+  onSave: (patch: { title: string; description?: string; ownerId?: string }) => void;
+  onDelete: (() => void) | undefined;
 }) {
   const theme = useTheme();
   const family = useFamilyStore((s) => s.members);
@@ -131,14 +167,21 @@ function AddItemModal({
   const [description, setDescription] = useState('');
   const [ownerId, setOwnerId] = useState<string | undefined>(undefined);
 
-  if (!columnId) return null;
+  React.useEffect(() => {
+    if (visible) {
+      setTitle(initial?.title ?? '');
+      setDescription(initial?.description ?? '');
+      setOwnerId(initial?.ownerId ?? undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
         <View style={[styles.modalCard, { backgroundColor: theme.colors.panel }]}>
           <Text style={{ fontFamily: theme.fonts.head, fontSize: 17, color: theme.colors.ink, marginBottom: 14 }}>
-            Add Item
+            {mode === 'edit' ? 'Edit Item' : 'Add Item'}
           </Text>
           <TextInput
             placeholder="Title"
@@ -168,15 +211,20 @@ function AddItemModal({
             ))}
           </View>
           <View style={{ flexDirection: 'row', gap: 10 }}>
+            {onDelete && (
+              <Pressable onPress={onDelete} style={[styles.modalBtn, { backgroundColor: theme.colors.danger + '22', flex: 0.7 }]}>
+                <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.danger }}>Delete</Text>
+              </Pressable>
+            )}
             <Pressable onPress={onClose} style={[styles.modalBtn, { backgroundColor: theme.colors.fieldBg }]}>
               <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.inkSoft }}>Cancel</Text>
             </Pressable>
             <Pressable
               disabled={!title.trim()}
-              onPress={() => onSave(title.trim(), description.trim(), ownerId)}
+              onPress={() => onSave({ title: title.trim(), description: description.trim() || undefined, ownerId })}
               style={[styles.modalBtn, { backgroundColor: theme.colors.ink, opacity: title.trim() ? 1 : 0.4 }]}
             >
-              <Text style={{ fontFamily: theme.fonts.headSemiBold, color: '#fff' }}>Add</Text>
+              <Text style={{ fontFamily: theme.fonts.headSemiBold, color: '#fff' }}>{mode === 'edit' ? 'Save' : 'Add'}</Text>
             </Pressable>
           </View>
         </View>
@@ -249,9 +297,10 @@ const styles = StyleSheet.create({
   col: { width: 300, borderRadius: 22, padding: 16, gap: 10 },
   colHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   countBadge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },
-  itemCard: { flexDirection: 'row', gap: 10, borderRadius: 16, padding: 12 },
+  itemCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 16, padding: 12 },
   itemTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ownerTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  editBtn: { paddingLeft: 4, paddingTop: 2 },
   fab: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   modalBackdrop: { flex: 1, backgroundColor: '#00000050', alignItems: 'center', justifyContent: 'center' },
   modalCard: { width: 420, borderRadius: 24, padding: 22 },

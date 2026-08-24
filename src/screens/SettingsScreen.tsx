@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Platform,
   Pressable,
   SafeAreaView,
@@ -18,6 +17,7 @@ import { EditIcon, PlusIcon, TrashIcon } from '../components/icons';
 import { useFamilyStore, useCalendarStore, useSettingsStore } from '../store/useAppStore';
 import { personColorOptions } from '../theme/colors';
 import { FamilyMember, ThemePreference } from '../store/types';
+import { confirmAction, notify } from '../lib/alerts';
 import {
   exchangeGoogleCode,
   fetchGoogleEvents,
@@ -120,10 +120,13 @@ function FamilyMembersSection() {
           member={m}
           onChange={(patch) => updateMember(m.id, patch)}
           onRemove={() =>
-            Alert.alert('Remove family member?', `This will remove "${m.name}" and unassign their items.`, [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Remove', style: 'destructive', onPress: () => removeMember(m.id) },
-            ])
+            confirmAction(
+              'Remove family member?',
+              `This will remove "${m.name}" and unassign their items.`,
+              'Remove',
+              () => removeMember(m.id),
+              { destructive: true },
+            )
           }
         />
       ))}
@@ -296,14 +299,14 @@ function ConnectedCalendarsSection() {
           const events = await fetchGoogleEvents(accessToken);
           replaceSyncedEvents('google', events);
           setGoogleConnection(true);
-          Alert.alert('Google Calendar connected', `Synced ${events.length} upcoming event(s).`);
+          notify('Google Calendar connected', `Synced ${events.length} upcoming event(s).`);
         } catch (err: any) {
-          Alert.alert('Google Calendar sync failed', String(err?.message ?? err));
+          notify('Google Calendar sync failed', String(err?.message ?? err));
         } finally {
           setGoogleBusy(false);
         }
       } else if (response?.type === 'error') {
-        Alert.alert('Google sign-in failed', response.error?.message ?? 'Please try again.');
+        notify('Google sign-in failed', response.error?.message ?? 'Please try again.');
       }
     })();
   }, [response]);
@@ -321,7 +324,7 @@ function ConnectedCalendarsSection() {
 
   const connectApple = async () => {
     if (!appleId.trim() || !applePassword.trim()) {
-      Alert.alert('Missing info', 'Enter your Apple ID and an app-specific password.');
+      notify('Missing info', 'Enter your Apple ID and an app-specific password.');
       return;
     }
     const creds: AppleCredentials = { appleId: appleId.trim(), appSpecificPassword: applePassword.trim() };
@@ -333,9 +336,9 @@ function ConnectedCalendarsSection() {
       replaceSyncedEvents('apple', events);
       setAppleConnection(true, creds.appleId);
       setApplePassword('');
-      Alert.alert('Apple Calendar connected', `Synced ${events.length} upcoming event(s).`);
+      notify('Apple Calendar connected', `Synced ${events.length} upcoming event(s).`);
     } catch (err: any) {
-      Alert.alert(
+      notify(
         'Apple Calendar sync failed',
         `${String(err?.message ?? err)}\n\nApple/iCloud sync is a first draft and hasn't been verified against a real Apple ID yet — see README.md.`,
       );

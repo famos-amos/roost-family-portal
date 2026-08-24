@@ -60,6 +60,7 @@ export const useFamilyStore = create<FamilyState>()(
 type ChoresState = {
   chores: Chore[];
   addChore: (c: Omit<Chore, 'id' | 'done'>) => void;
+  updateChore: (id: string, patch: Partial<Omit<Chore, 'id'>>) => void;
   toggleChore: (id: string) => void;
   claimChore: (id: string, assigneeId: string) => void;
   removeChore: (id: string) => void;
@@ -72,6 +73,8 @@ export const useChoresStore = create<ChoresState>()(
       chores: seedChores,
       addChore: (c) =>
         set((s) => ({ chores: [...s.chores, { ...c, id: makeId(), done: false }] })),
+      updateChore: (id, patch) =>
+        set((s) => ({ chores: s.chores.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
       toggleChore: (id) =>
         set((s) => ({
           chores: s.chores.map((c) => (c.id === id ? { ...c, done: !c.done } : c)),
@@ -122,6 +125,7 @@ type BoardsState = {
   addColumn: (c: Omit<BoardColumn, 'id'>) => void;
   removeColumn: (id: string) => void;
   addItem: (i: Omit<BoardItem, 'id' | 'done'>) => void;
+  updateItem: (id: string, patch: Partial<Omit<BoardItem, 'id'>>) => void;
   toggleItem: (id: string) => void;
   removeItem: (id: string) => void;
 };
@@ -138,6 +142,8 @@ export const useBoardsStore = create<BoardsState>()(
           items: s.items.filter((i) => i.columnId !== id),
         })),
       addItem: (i) => set((s) => ({ items: [...s.items, { ...i, id: makeId(), done: false }] })),
+      updateItem: (id, patch) =>
+        set((s) => ({ items: s.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) })),
       toggleItem: (id) =>
         set((s) => ({
           items: s.items.map((i) => (i.id === id ? { ...i, done: !i.done } : i)),

@@ -5,6 +5,9 @@ export type RootStackParamList = {
   MealPlans: undefined;
   Boards: undefined;
   Settings: undefined;
+  GroceryList: undefined;
+  Recipes: undefined;
+  Suggestions: undefined;
 };
 
 // Lets `useNavigation()` calls infer route names/params without passing a
