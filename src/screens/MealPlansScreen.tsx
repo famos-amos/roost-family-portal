@@ -37,7 +37,7 @@ export function MealPlansScreen() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={styles.plannerWrap}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.plannerWrap}>
         <View style={styles.planner}>
           {WEEKDAY_LABELS.map(({ key, label }) => (
             <Text
@@ -236,6 +236,7 @@ function EditMealModal({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, paddingBottom: 10 },
   plannerWrap: { paddingHorizontal: 24 },
   planner: { flexDirection: 'row', flexWrap: 'wrap' },

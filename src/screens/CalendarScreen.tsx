@@ -114,7 +114,7 @@ export function CalendarScreen() {
         </Text>
       )}
 
-      <ScrollView contentContainerStyle={styles.gridWrap}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.gridWrap}>
         <View style={[styles.gridCard, { backgroundColor: theme.colors.panel }]}>
           {view !== 'day' && (
             <View style={styles.dowRow}>
@@ -279,6 +279,10 @@ function AddEventModal({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  // Without an explicit flex here, the ScrollView has no bounded height on
+  // web (react-native-web needs a flex child with minHeight:0 to know it's
+  // allowed to scroll internally instead of just growing past the screen).
+  scroll: { flex: 1, minHeight: 0 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, paddingBottom: 10, flexWrap: 'wrap' },
   monthTitle: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   navBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#ffffffb0', alignItems: 'center', justifyContent: 'center' },

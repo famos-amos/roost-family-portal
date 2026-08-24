@@ -42,7 +42,7 @@ export function ChoresScreen() {
         <PrimaryButton label="Reset Week" color={theme.colors.inkSoft} onPress={resetWeek} />
       </View>
 
-      <ScrollView horizontal contentContainerStyle={styles.board}>
+      <ScrollView horizontal style={styles.scroll} contentContainerStyle={styles.board}>
         {columns.map((col) => {
           const items = chores.filter((c) => c.assigneeId === col.key);
           const assigneeName = col.key ? family.find((f) => f.id === col.key)?.name : undefined;
@@ -225,6 +225,7 @@ function AddChoreModal({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, paddingBottom: 12, flexWrap: 'wrap' },
   weekPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
   starsPill: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },

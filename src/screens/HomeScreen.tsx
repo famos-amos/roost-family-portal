@@ -53,11 +53,13 @@ export function HomeScreen() {
         Long-press the dots to drag a widget, tap the corner marks to resize it.
       </Text>
       <DraggableFlatList
+        style={styles.list}
+        containerStyle={styles.list}
         data={sorted}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         onDragEnd={({ data }) => reorder(data.map((d) => d.id))}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={styles.listContent}
       />
     </SafeAreaView>
   );
@@ -103,5 +105,11 @@ function backgroundFor(id: DashboardWidgetLayout['id'], theme: ReturnType<typeof
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   hint: { paddingHorizontal: 24, fontSize: 11.5, marginBottom: 6 },
-  list: { paddingHorizontal: 24, paddingBottom: 24 },
+  // `flex: 1` + `minHeight: 0` lets the list claim exactly the remaining
+  // space below the header/hint and manage its own internal scrolling,
+  // instead of growing past the viewport (which is what was clipping the
+  // page on web, where nothing scrolls unless a flex child explicitly
+  // gives up the "never shrink below content size" default).
+  list: { flex: 1, minHeight: 0 },
+  listContent: { paddingHorizontal: 24, paddingBottom: 24 },
 });

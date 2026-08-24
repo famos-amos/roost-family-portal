@@ -32,7 +32,7 @@ export function BoardsScreen() {
         />
       </View>
 
-      <ScrollView horizontal contentContainerStyle={styles.board}>
+      <ScrollView horizontal style={styles.scroll} contentContainerStyle={styles.board}>
         {columns.map((col) => {
           const colItems = items.filter((i) => i.columnId === col.id);
           return (
@@ -243,6 +243,7 @@ function NewColumnModal({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
   toolbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingBottom: 10 },
   board: { paddingHorizontal: 24, paddingBottom: 24, gap: 18 },
   col: { width: 300, borderRadius: 22, padding: 16, gap: 10 },
