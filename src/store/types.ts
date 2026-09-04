@@ -70,9 +70,3 @@ export type WidgetId =
   | 'chores';
 
 export type WidgetSize = 'sm' | 'md' | 'lg';
-
-export type DashboardWidgetLayout = {
-  id: WidgetId;
-  order: number;
-  size: WidgetSize;
-};

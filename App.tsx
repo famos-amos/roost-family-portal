@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -6,12 +6,49 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import { useAppFonts } from './src/theme/useAppFonts';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { hydrateAllStores } from './src/store/useAppStore';
 
 function AppShell() {
   const fontsLoaded = useAppFonts();
+  const [dataReady, setDataReady] = useState(false);
   const theme = useTheme();
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    // Fire once at launch: pulls the family's data down from Supabase (or,
+    // if it isn't configured, just leaves the in-memory seed data in place)
+    // and opens the realtime subscriptions that keep this device in sync
+    // with any other device open on the same household. See
+    // src/store/useAppStore.ts → "Supabase sync helpers".
+    //
+    // Each individual table fetch already times out on its own (see
+    // fetchTable's FETCH_TIMEOUT_MS) — this is a second, outer backstop so
+    // that even something unexpected getting stuck can never leave a
+    // wall-mounted tablet parked on a spinner indefinitely.
+    let settled = false;
+    const finish = () => {
+      if (!settled) {
+        settled = true;
+        setDataReady(true);
+      }
+    };
+    const backstop = setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.error('[app] Supabase hydration did not finish within 10s — showing the app anyway');
+      finish();
+    }, 10000);
+
+    hydrateAllStores()
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[app] initial Supabase hydration failed — continuing with seed data', err);
+      })
+      .finally(() => {
+        clearTimeout(backstop);
+        finish();
+      });
+  }, []);
+
+  if (!fontsLoaded || !dataReady) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.bg }}>
         <ActivityIndicator color={theme.colors.ink} />

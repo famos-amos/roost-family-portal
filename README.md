@@ -6,7 +6,8 @@ planner, family boards (to-do / wishlist / shopping list) and a customizable
 home dashboard with a daily Challenge card and Verse of the Day.
 
 Built with [Expo](https://expo.dev) / React Native, TypeScript, React
-Navigation, and Zustand (persisted to on-device storage).
+Navigation, Zustand, and [Supabase](https://supabase.com) as the shared
+backend (Postgres + realtime sync — see "Setting up Supabase" below).
 
 ## Requirements
 
@@ -26,10 +27,80 @@ Scan the QR code with Expo Go on your tablet, or press `a` to launch an
 Android emulator. The app is locked to landscape orientation, matching the
 wall-mounted layout it was designed for.
 
-All family data (members, chores, meals, board items, calendar events,
-settings, dashboard layout) is stored locally on-device via AsyncStorage —
-nothing is sent to a backend server except the calendar sync calls described
-below, which talk directly to Google's / Apple's own servers.
+**Before anything shows up as "saved", set up Supabase** — see the next
+section. Until then the app runs on temporary in-memory sample data (a
+console warning says so on launch), which is fine for kicking the tires but
+nothing you change will still be there next time you open it.
+
+Family data (members, chores, meals, board items, calendar events) lives in
+your own Supabase project's Postgres database and syncs in real time across
+every device that has the app open. Device-only preferences (theme, which
+calendar people are filtered out, per-widget detail level) stay local via
+AsyncStorage, same as before.
+
+## Setting up Supabase
+
+Supabase is the free-tier-friendly backend this app saves everything to —
+a hosted Postgres database plus realtime sync, reachable straight from the
+app with no server code of your own to run. Setup is entirely in Supabase's
+dashboard and takes about 5 minutes.
+
+1. **Create a project.** Go to [supabase.com](https://supabase.com) → sign
+   up (GitHub login is easiest) → **New Project**. Pick any name/region/
+   database password (you won't need the password day-to-day) and wait
+   ~1-2 minutes for it to finish provisioning.
+2. **Run the schema.** In the project's left sidebar go to **SQL Editor →
+   New query**, then open this repo's `supabase/schema.sql`, copy its
+   entire contents, paste into the editor, and click **Run**. This creates
+   all six tables the app needs (family members, chores, meals, board
+   columns/items, calendar events), turns on Row Level Security with
+   policies that allow the app's key to read/write them, turns on realtime
+   sync for each table, and inserts the same starter family/chores/meals
+   the app used to ship with locally — so it isn't empty on first load.
+   Safe to re-run; it won't duplicate rows.
+3. **Grab your API keys.** Go to **Settings → API** (gear icon, bottom of
+   the left sidebar). You need two values off that page:
+   - **Project URL** (looks like `https://abcdefghijk.supabase.co`)
+   - **anon / public** key, under Project API keys (a long string starting
+     `eyJ...`) — **not** the `service_role` key; that one must never ship
+     inside an app.
+4. **Add them to the app.** Copy `.env.example` to a new file named `.env`
+   in the project root, and paste your two values in:
+
+   ```bash
+   EXPO_PUBLIC_SUPABASE_URL=https://abcdefghijk.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+   ```
+
+   Restart `npx expo start` if it was already running. Locally, that's it —
+   the app now reads and writes Supabase instead of temporary sample data.
+5. **For the deployed GitHub Pages site**, the same two values need to be
+   available to GitHub Actions at build time (a local `.env` file never
+   gets pushed to GitHub — see `.gitignore` — so this is a separate step):
+   - In the GitHub repo, go to **Settings → Secrets and variables →
+     Actions → New repository secret**.
+   - Add one named `EXPO_PUBLIC_SUPABASE_URL` with your Project URL.
+   - Add another named `EXPO_PUBLIC_SUPABASE_ANON_KEY` with your anon key.
+   - Push to `main` (or re-run the "Deploy web build to GitHub Pages"
+     workflow from the Actions tab) — the next deploy picks them up
+     automatically; see `.github/workflows/deploy-pages.yml`.
+
+**A note on security**, since there's no login screen in this app: every
+table is set up so the anon key can freely read and write it (see the
+policies in `supabase/schema.sql`). That's the right tradeoff for a private
+single-family app whose GitHub Pages URL you don't publish or share — but
+because the anon key ships inside the web bundle, anyone who does find that
+URL and opens their browser's dev tools could read your family's data too.
+Don't link to the site publicly, and if that's ever a concern, Supabase
+Auth (real per-person login) is the natural next step — ask for help
+wiring that up if you want it.
+
+**If Supabase becomes unreachable** (a typo in the URL, a paused free-tier
+project, a network hiccup), the app doesn't hang — every request times out
+after a few seconds and it falls back to showing whatever it last knew
+(seed data on a first run), so a wall-mounted tablet is never stuck on a
+loading spinner. Changes made while disconnected won't be saved, though —
+they're not queued for retry.
 
 ## Google Calendar setup (2-way sync)
 
@@ -152,12 +223,16 @@ necessity rather than oversight:
 ```
 src/
   components/    Shared UI (icons, TopBar, Avatar, buttons, cards, ...)
-  data/          Seed/demo data
-  lib/           date helpers, id generation, Google + Apple calendar clients
+  data/          Seed/demo data (recipes; the Supabase fallback data) + daily content
+  lib/           date helpers, id generation, Google + Apple calendar clients, Supabase client
   navigation/    React Navigation route types + the root stack navigator
   screens/       One folder/file per screen (Home, Calendar, Chores, ...)
-  store/         Zustand stores (one per domain), persisted to AsyncStorage
+  store/         Zustand stores (one per domain) — family/chores/meals/boards/calendar
+                 sync to Supabase (see useAppStore.ts); theme/notifications/dashboard
+                 layout stay in AsyncStorage as device-local preferences
   theme/         Colors, typography, ThemeProvider (light/dark), font loading
+supabase/
+  schema.sql     Run once in your Supabase project's SQL Editor — see "Setting up Supabase"
 ```
 
 ## Known limitations / simplifications (v1)
@@ -165,13 +240,17 @@ src/
 - **Chores "Claim" button** assigns the chore to the first family member in
   the list rather than opening a person picker — a placeholder to revisit.
 - **Apple/iCloud sync is unverified** against a real account (see above).
-- **Recipes** and **Suggestions** quick-links on the Meal Plans screen are
-  stubs (`Alert.alert(...)`) — no recipe library exists yet.
 - The Home dashboard's To-Do widget reuses the "Family To-Do" board column
   rather than a separate personal task list.
 - Push notifications (the toggles in Settings → Notifications) are stored
   as preferences but don't yet trigger real device notifications — wiring
   those up to `expo-notifications` is a good next step.
+- **No per-person login.** Every device with the app open shares one
+  Supabase-backed household — see the security note under "Setting up
+  Supabase" above.
+- **Offline edits aren't queued.** If Supabase is unreachable, the app
+  still shows (and lets you tap around) whatever it last knew, but changes
+  made in that state aren't saved or retried once the connection's back.
 
 ## Scripts
 

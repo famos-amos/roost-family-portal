@@ -31,7 +31,16 @@ jobs:
         run: npm ci
 
       - name: Export static web build
+        # These two are read from the repo's Settings → Secrets and
+        # variables → Actions (see README.md → "Setting up Supabase" for
+        # where the values come from and how to add them here). They get
+        # baked into the exported JS bundle at this step — that's expected
+        # for the anon/public key; see src/lib/supabase.ts for why that's
+        # the correct key to use here.
         run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
       # GitHub Pages ignores files/folders starting with an underscore by
       # default (its Jekyll processing step) — Expo's web output puts the
