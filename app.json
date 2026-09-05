@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Roost",
+    "name": "Family Portal",
     "slug": "roost-family-portal",
     "version": "1.0.0",
     "orientation": "landscape",
@@ -31,7 +31,7 @@
       "expo-secure-store"
     ],
     "experiments": {
-      "baseUrl": "/roost-family-portal"
+      "baseUrl": "/family-portal"
     },
     "extra": {
       "googleOAuthClientIdAndroid": "REPLACE_WITH_GOOGLE_ANDROID_CLIENT_ID",

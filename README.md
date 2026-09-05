@@ -1,4 +1,4 @@
-# Roost — Family Portal
+# Family Portal
 
 A shared family dashboard built for a wall-mounted 10.1" Android tablet: a
 smart 2-way synced calendar (Google + Apple/iCloud), chores board, meal
@@ -139,7 +139,7 @@ Until real values replace the `REPLACE_WITH_...` placeholders, the Settings
 screen shows "Setup required" instead of a Connect button (`isGoogleConfigured()`
 in `src/lib/googleCalendar.ts` gates this).
 
-Once connected, Roost pulls the next 60 days of events from the primary
+Once connected, FamilyPortal pulls the next 60 days of events from the primary
 Google Calendar into the app's calendar, and events you add on the Calendar
 screen are pushed back to Google.
 
@@ -152,7 +152,7 @@ password** rather than the real Apple ID password:
 
 1. Go to [appleid.apple.com](https://appleid.apple.com) → Sign-In and
    Security → App-Specific Passwords → generate one.
-2. In Roost's Settings → Connected Calendars, enter the Apple ID email and
+2. In FamilyPortal's Settings → Connected Calendars, enter the Apple ID email and
    that app-specific password.
 
 The password is stored in the device keychain / EncryptedSharedPreferences
@@ -169,7 +169,7 @@ anywhere but Apple's own CalDAV servers.
 
 ## Deploying to the web (GitHub Pages)
 
-Roost is a React Native / Expo app, but Expo can export the same codebase as
+FamilyPortal is a React Native / Expo app, but Expo can export the same codebase as
 a static website (React Native Web) — no separate web build to maintain.
 This repo is already set up to auto-deploy that web build to GitHub Pages
 on every push to `main`, via `.github/workflows/deploy-pages.yml`.
