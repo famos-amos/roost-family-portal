@@ -44,6 +44,12 @@ const storage = createJSONStorage(() => AsyncStorage);
 //      to the console rather than surfaced as an alert, since a transient
 //      network hiccup shouldn't interrupt someone mid-task — the next
 //      realtime sync (or app reload) reconciles things.
+//   3. Supabase is the source of truth whenever it's reachable — including
+//      its *emptiness*. If you delete every row of a table in Supabase, the
+//      app shows that table as empty too, rather than quietly falling back
+//      to old seed/demo names forever. The only time the app falls back to
+//      whatever it already has is when Supabase genuinely can't be reached
+//      (not configured, timed out, errored) — see fetchTable's `ok` flag.
 // If EXPO_PUBLIC_SUPABASE_URL/EXPO_PUBLIC_SUPABASE_ANON_KEY aren't set
 // (see src/lib/supabase.ts), every store just keeps its seed data in memory
 // for the session — nothing is persisted anywhere. See README.md →
@@ -94,24 +100,28 @@ function syncDelete(table: string, id: string) {
 // data" rather than "show nothing, forever".
 const FETCH_TIMEOUT_MS = 8000;
 
-/** Fetch every row of `table` and hand back the raw rows, or `[]` if
- * Supabase isn't configured, the request times out, or it fails outright
- * (caller keeps whatever seed data it already has as initial state in
- * every one of those cases — this never throws). */
-async function fetchTable(table: string): Promise<any[]> {
-  if (!isSupabaseConfigured) return [];
+/** Fetch every row of `table`. `ok: true` means Supabase is the source of
+ * truth for this call — the app is meant to be *reliant* on the database,
+ * so an empty-but-reachable table means the app shows empty too (a
+ * genuinely deleted-down-to-nothing table is not the same thing as "we
+ * couldn't reach the database"). `ok: false` (not configured, timed out,
+ * or errored) is the only case where the caller should keep whatever it
+ * already has (seed data on a first launch, or last-known-good data)
+ * rather than trust `rows` (always `[]` in that case). This never throws. */
+async function fetchTable(table: string): Promise<{ ok: boolean; rows: any[] }> {
+  if (!isSupabaseConfigured) return { ok: false, rows: [] };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const { data, error } = await supabase.from(table).select('*').abortSignal(controller.signal);
     if (error) {
       logSyncError('fetch', table, error);
-      return [];
+      return { ok: false, rows: [] };
     }
-    return data ?? [];
+    return { ok: true, rows: data ?? [] };
   } catch (err) {
     logSyncError('fetch (timed out or network error)', table, err);
-    return [];
+    return { ok: false, rows: [] };
   } finally {
     clearTimeout(timeout);
   }
@@ -162,8 +172,8 @@ export const useFamilyStore = create<FamilyState>()((set, get) => ({
   members: seedFamily,
   hydrated: false,
   hydrate: async () => {
-    const rows = await fetchTable('family_members');
-    if (rows.length) set({ members: rows.map(memberFromRow) });
+    const { ok, rows } = await fetchTable('family_members');
+    if (ok) set({ members: rows.map(memberFromRow) });
     set({ hydrated: true });
     if (!familySubscribed) {
       familySubscribed = true;
@@ -230,8 +240,8 @@ export const useChoresStore = create<ChoresState>()((set, get) => ({
   chores: seedChores,
   hydrated: false,
   hydrate: async () => {
-    const rows = await fetchTable('chores');
-    if (rows.length) set({ chores: rows.map(choreFromRow) });
+    const { ok, rows } = await fetchTable('chores');
+    if (ok) set({ chores: rows.map(choreFromRow) });
     set({ hydrated: true });
     if (!choresSubscribed) {
       choresSubscribed = true;
@@ -324,8 +334,8 @@ export const useMealsStore = create<MealsState>()((set, get) => ({
   meals: seedMeals,
   hydrated: false,
   hydrate: async () => {
-    const rows = await fetchTable('meals');
-    if (rows.length) set({ meals: rows.map(mealFromRow) });
+    const { ok, rows } = await fetchTable('meals');
+    if (ok) set({ meals: rows.map(mealFromRow) });
     set({ hydrated: true });
     if (!mealsSubscribed) {
       mealsSubscribed = true;
@@ -411,9 +421,9 @@ export const useBoardsStore = create<BoardsState>()((set, get) => ({
   items: seedBoardItems,
   hydrated: false,
   hydrate: async () => {
-    const [columnRows, itemRows] = await Promise.all([fetchTable('board_columns'), fetchTable('board_items')]);
-    if (columnRows.length) set({ columns: columnRows.map(columnFromRow) });
-    if (itemRows.length) set({ items: itemRows.map(itemFromRow) });
+    const [columnRes, itemRes] = await Promise.all([fetchTable('board_columns'), fetchTable('board_items')]);
+    if (columnRes.ok) set({ columns: columnRes.rows.map(columnFromRow) });
+    if (itemRes.ok) set({ items: itemRes.rows.map(itemFromRow) });
     set({ hydrated: true });
     if (!boardsSubscribed) {
       boardsSubscribed = true;
@@ -502,6 +512,7 @@ type CalendarState = {
   hydrated: boolean;
   hydrate: () => Promise<void>;
   addEvent: (e: Omit<CalendarEvent, 'id' | 'source'>) => void;
+  updateEvent: (id: string, patch: Partial<Omit<CalendarEvent, 'id'>>) => void;
   removeEvent: (id: string) => void;
   replaceSyncedEvents: (source: 'google' | 'apple', events: Omit<CalendarEvent, 'source'>[]) => void;
 };
@@ -512,8 +523,8 @@ export const useCalendarStore = create<CalendarState>()((set, get) => ({
   events: seedEvents,
   hydrated: false,
   hydrate: async () => {
-    const rows = await fetchTable('calendar_events');
-    if (rows.length) set({ events: rows.map(eventFromRow) });
+    const { ok, rows } = await fetchTable('calendar_events');
+    if (ok) set({ events: rows.map(eventFromRow) });
     set({ hydrated: true });
     if (!calendarSubscribed) {
       calendarSubscribed = true;
@@ -534,6 +545,10 @@ export const useCalendarStore = create<CalendarState>()((set, get) => ({
     const event: CalendarEvent = { ...e, id, source: 'local' };
     set((s) => ({ events: [...s.events, event] }));
     syncInsert('calendar_events', eventToRow(id, event));
+  },
+  updateEvent: (id, patch) => {
+    set((s) => ({ events: s.events.map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
+    syncUpdate('calendar_events', id, eventToRow(id, patch));
   },
   removeEvent: (id) => {
     set((s) => ({ events: s.events.filter((e) => e.id !== id) }));

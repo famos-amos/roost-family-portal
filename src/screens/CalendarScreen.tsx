@@ -3,9 +3,11 @@ import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput
 import { TopBar } from '../components/TopBar';
 import { useTheme } from '../theme/ThemeProvider';
 import { useCalendarStore, useFamilyStore, useSettingsStore } from '../store/useAppStore';
+import { CalendarEvent } from '../store/types';
 import { buildMonthGrid, formatMonthTitle, todayIso } from '../lib/date';
 import { CalendarIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../components/icons';
 import { PrimaryButton, SegmentedControl } from '../components/ui';
+import { confirmAction } from '../lib/alerts';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -13,11 +15,13 @@ export function CalendarScreen() {
   const theme = useTheme();
   const [cursor, setCursor] = useState(new Date());
   const [view, setView] = useState<'day' | 'week' | 'month'>('month');
-  const [modalOpen, setModalOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(todayIso());
+  const [editing, setEditing] = useState<CalendarEvent | null>(null);
 
   const events = useCalendarStore((s) => s.events);
   const addEvent = useCalendarStore((s) => s.addEvent);
+  const updateEvent = useCalendarStore((s) => s.updateEvent);
   const removeEvent = useCalendarStore((s) => s.removeEvent);
   const family = useFamilyStore((s) => s.members);
   const hidden = useSettingsStore((s) => s.hiddenPersonIds);
@@ -103,7 +107,7 @@ export function CalendarScreen() {
           icon={<PlusIcon size={15} color="#fff" />}
           onPress={() => {
             setSelectedDate(today);
-            setModalOpen(true);
+            setAddOpen(true);
           }}
         />
       </View>
@@ -135,7 +139,7 @@ export function CalendarScreen() {
                   key={i}
                   onPress={() => {
                     setSelectedDate(iso);
-                    setModalOpen(true);
+                    setAddOpen(true);
                   }}
                   style={[
                     styles.dayCell,
@@ -153,7 +157,12 @@ export function CalendarScreen() {
                     return (
                       <Pressable
                         key={e.id}
-                        onLongPress={() => removeEvent(e.id)}
+                        // Tapping an event opens it for editing rather than the
+                        // day's "add new event" modal — this Pressable being
+                        // nested inside the day cell's own Pressable is enough
+                        // for React Native's touch responder to award the tap
+                        // to whichever one was actually touched.
+                        onPress={() => setEditing(e)}
                         style={[
                           styles.chip,
                           { backgroundColor: (person?.color ?? theme.colors.inkSoft) + '30' },
@@ -181,35 +190,73 @@ export function CalendarScreen() {
         </View>
       </ScrollView>
 
-      <AddEventModal
-        visible={modalOpen}
+      <EventFormModal
+        mode="add"
+        visible={addOpen}
         date={selectedDate}
-        onClose={() => setModalOpen(false)}
-        onSave={(title, time, personId) => {
-          addEvent({ date: selectedDate, title, time: time || undefined, personId });
-          setModalOpen(false);
+        initial={undefined}
+        onClose={() => setAddOpen(false)}
+        onSave={(patch) => {
+          addEvent({ date: selectedDate, title: patch.title, time: patch.time || undefined, personId: patch.personId });
+          setAddOpen(false);
+        }}
+        onDelete={undefined}
+      />
+
+      <EventFormModal
+        mode="edit"
+        visible={editing !== null}
+        date={editing?.date ?? selectedDate}
+        initial={editing ?? undefined}
+        onClose={() => setEditing(null)}
+        onSave={(patch) => {
+          if (!editing) return;
+          updateEvent(editing.id, { title: patch.title, time: patch.time || undefined, personId: patch.personId });
+          setEditing(null);
+        }}
+        onDelete={() => {
+          if (!editing) return;
+          confirmAction('Delete event?', `Remove "${editing.title}" from the calendar?`, 'Delete', () => {
+            removeEvent(editing.id);
+            setEditing(null);
+          }, { destructive: true });
         }}
       />
     </SafeAreaView>
   );
 }
 
-function AddEventModal({
+function EventFormModal({
+  mode,
   visible,
   date,
+  initial,
   onClose,
   onSave,
+  onDelete,
 }: {
+  mode: 'add' | 'edit';
   visible: boolean;
   date: string;
+  initial: CalendarEvent | undefined;
   onClose: () => void;
-  onSave: (title: string, time: string, personId: string | null) => void;
+  onSave: (patch: { title: string; time: string; personId: string | null }) => void;
+  onDelete: (() => void) | undefined;
 }) {
   const theme = useTheme();
   const family = useFamilyStore((s) => s.members);
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('');
   const [personId, setPersonId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (visible) {
+      setTitle(initial?.title ?? '');
+      setTime(initial?.time ?? '');
+      setPersonId(initial?.personId ?? null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   if (!visible) return null;
 
@@ -218,7 +265,7 @@ function AddEventModal({
       <View style={styles.modalBackdrop}>
         <View style={[styles.modalCard, { backgroundColor: theme.colors.panel }]}>
           <Text style={{ fontFamily: theme.fonts.head, fontSize: 17, color: theme.colors.ink, marginBottom: 4 }}>
-            Add Event
+            {mode === 'edit' ? 'Edit Event' : 'Add Event'}
           </Text>
           <Text style={{ fontFamily: theme.fonts.bodyBold, fontSize: 12, color: theme.colors.inkSoft, marginBottom: 14 }}>
             {date}
@@ -260,12 +307,17 @@ function AddEventModal({
           </View>
 
           <View style={{ flexDirection: 'row', gap: 10 }}>
+            {onDelete && (
+              <Pressable onPress={onDelete} style={[styles.modalBtn, { backgroundColor: theme.colors.danger + '22', flex: 0.7 }]}>
+                <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.danger }}>Delete</Text>
+              </Pressable>
+            )}
             <Pressable onPress={onClose} style={[styles.modalBtn, { backgroundColor: theme.colors.fieldBg }]}>
               <Text style={{ fontFamily: theme.fonts.headSemiBold, color: theme.colors.inkSoft }}>Cancel</Text>
             </Pressable>
             <Pressable
               disabled={!title.trim()}
-              onPress={() => onSave(title.trim(), time.trim(), personId)}
+              onPress={() => onSave({ title: title.trim(), time: time.trim(), personId })}
               style={[styles.modalBtn, { backgroundColor: theme.colors.ink, opacity: title.trim() ? 1 : 0.4 }]}
             >
               <Text style={{ fontFamily: theme.fonts.headSemiBold, color: '#fff' }}>Save</Text>
